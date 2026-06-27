@@ -1,0 +1,7 @@
+{
+  "kirisameJar": "kirisame-core-1.0-SNAPSHOT-all.jar",
+  "agentJar": "kirisame-agent-1.0-SNAPSHOT-all.jar",
+  "javaHome": "",
+  "jvmArgs": [],
+  "gameArgs": []
+}

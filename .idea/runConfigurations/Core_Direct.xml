@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Core_Direct" type="Application" factoryName="Application">
+    <option name="MAIN_CLASS_NAME" value="org.kirisame.mc.core.KirisameFramework" />
+    <module name="KirisameFramework.framework-core.main" />
+    <option name="VM_PARAMETERS" value="-javaagent:$PROJECT_DIR$/framework-agent/build/libs/kirisame-agent-1.0-SNAPSHOT-all.jar" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/workdir" />
+    <method v="2">
+      <option name="Gradle.BeforeRunTask" enabled="true" tasks="shadowJar" externalProjectPath="$PROJECT_DIR$/framework-agent" />
+      <option name="Gradle.BeforeRunTask" enabled="true" tasks="prepareWorkdir" externalProjectPath="$PROJECT_DIR$" />
+    </method>
+  </configuration>
+</component>
