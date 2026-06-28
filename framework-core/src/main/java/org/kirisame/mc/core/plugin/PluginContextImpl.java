@@ -7,6 +7,7 @@ import org.kirisame.mc.api.plugin.PluginContext;
 import org.kirisame.mc.api.plugin.PluginDescriptor;
 import org.kirisame.mc.api.plugin.PluginLogger;
 import org.kirisame.mc.api.service.ServiceRegistry;
+import org.kirisame.mc.api.transform.TransformBridge;
 
 import java.nio.file.Path;
 import java.util.Optional;
@@ -21,14 +22,17 @@ public class PluginContextImpl implements PluginContext {
     private final ServiceRegistry serviceRegistry;
     private final PluginManager pluginManager;
     private final PluginLogger logger;
+    private final TransformBridge transformBridge;
 
     public PluginContextImpl(PluginInfo info, EventBus eventBus,
-                             ServiceRegistry serviceRegistry, PluginManager pluginManager) {
+                             ServiceRegistry serviceRegistry, PluginManager pluginManager,
+                             TransformBridge transformBridge) {
         this.info = info;
         this.eventBus = eventBus;
         this.serviceRegistry = serviceRegistry;
         this.pluginManager = pluginManager;
         this.logger = new PluginLoggerImpl(info.getName());
+        this.transformBridge = transformBridge;
     }
 
     @Override
@@ -54,6 +58,11 @@ public class PluginContextImpl implements PluginContext {
     @Override
     public PluginLogger getLogger() {
         return logger;
+    }
+
+    @Override
+    public TransformBridge getTransformBridge() {
+        return transformBridge;
     }
 
     @Override

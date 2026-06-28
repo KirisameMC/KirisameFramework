@@ -5,8 +5,7 @@
     <option name="VM_PARAMETERS" value="-javaagent:$PROJECT_DIR$/framework-agent/build/libs/kirisame-agent-1.0-SNAPSHOT-all.jar" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$/workdir" />
     <method v="2">
-      <option name="Gradle.BeforeRunTask" enabled="true" tasks="shadowJar" externalProjectPath="$PROJECT_DIR$/framework-agent" />
-      <option name="Gradle.BeforeRunTask" enabled="true" tasks="prepareWorkdir" externalProjectPath="$PROJECT_DIR$" />
+      <option name="Gradle.BeforeRunTask" enabled="true" tasks="beforeRunning" externalProjectPath="$PROJECT_DIR$" />
     </method>
   </configuration>
 </component>

@@ -13,6 +13,7 @@ import java.net.URLClassLoader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Loads and starts the Minecraft server JAR via reflection.
@@ -30,15 +31,17 @@ public class MinecraftServerLoader {
     /**
      * Loads the server JAR and detects the Minecraft version.
      *
+     * @param parentClassLoader the parent classloader (should include plugin classloaders
+     *                          so Advice classes from plugins are visible to the server)
      * @return a ClassLoader that can access MC classes
      */
-    public ClassLoader load() throws IOException {
+    public ClassLoader load(ClassLoader parentClassLoader) throws IOException {
         if (!Files.exists(serverJarPath)) {
             throw new IOException("Server JAR not found: " + serverJarPath);
         }
 
         URL jarUrl = serverJarPath.toUri().toURL();
-        serverClassLoader = new URLClassLoader(new URL[]{jarUrl}, getClass().getClassLoader());
+        serverClassLoader = new URLClassLoader(new URL[]{jarUrl}, parentClassLoader);
 
         // Try to read version.json from the JAR
         try {

@@ -16,6 +16,7 @@ dependencies {
 
     implementation("com.google.code.gson:gson:${rootProject.extra["gsonVersion"]}")
     implementation("io.github.classgraph:classgraph:${rootProject.extra["classGraphVersion"]}")
+    implementation("org.ow2.asm:asm:9.7")
     implementation("org.tinylog:tinylog-api:${rootProject.extra["tinylogVersion"]}")
     implementation("org.tinylog:tinylog-impl:${rootProject.extra["tinylogVersion"]}")
 }

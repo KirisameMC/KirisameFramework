@@ -15,6 +15,7 @@ import org.kirisame.mc.core.command.CommandManager;
 import org.kirisame.mc.core.console.ConsoleInterceptor;
 import org.kirisame.mc.core.console.ConsoleParser;
 import org.kirisame.mc.core.console.OriginalOutput;
+import org.kirisame.mc.core.console.SystemInInterceptor;
 import org.kirisame.mc.core.console.message.ParsedMessage;
 import org.kirisame.mc.core.event.EventBusImpl;
 import org.kirisame.mc.core.minecraft.MinecraftServerLoader;
@@ -29,6 +30,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -55,6 +57,7 @@ public class LifecycleManager {
     private PluginManager pluginManager;
     private MinecraftServerLoader serverLoader;
     private ConsoleInterceptor consoleInterceptor;
+    private SystemInInterceptor systemInInterceptor;
     private ConsoleParser consoleParser;
 
     // Configuration
@@ -66,9 +69,10 @@ public class LifecycleManager {
             init();
             discoverPlugins();
             resolveDependencies();
-            loadPlugins();
+            applyPluginTransforms();  // Before server start (reads bytecode from JARs)
             startMinecraftServer(args);
             waitForServer();
+            loadPlugins();            // After server start (PluginCL now sees NMS)
             enablePlugins();
             registerAgentBridge();
             runMainLoop();
@@ -100,13 +104,22 @@ public class LifecycleManager {
         // Capture original System.out BEFORE installing the interceptor
         OriginalOutput.capture();
 
-        // Install console interceptor
+        // Install console interceptor (output side)
         consoleParser = new ConsoleParser(eventBus);
         consoleInterceptor = new ConsoleInterceptor(
                 this::onConsoleMessage,
                 this::onConsoleCommand
         );
         consoleInterceptor.install();
+
+        // Install System.in interceptor (input side) for !! commands
+        try {
+            systemInInterceptor = new SystemInInterceptor(this::onConsoleCommand);
+            systemInInterceptor.install();
+            Logger.info("System.in interceptor installed");
+        } catch (Exception e) {
+            Logger.warn(e, "Failed to install System.in interceptor");
+        }
 
         Logger.info("Framework initialized, workdir: {}", workDir);
     }
@@ -132,16 +145,27 @@ public class LifecycleManager {
 
     private void loadPlugins() {
         state = State.LOAD_PLUGINS;
-        pluginManager.loadPlugins(getClass().getClassLoader());
+        ClassLoader frameworkCL = getClass().getClassLoader();
+        ClassLoader serverCL = serverLoader != null ? serverLoader.getServerClassLoader() : null;
+        pluginManager.loadPlugins(frameworkCL, serverCL);
+    }
+
+    private void applyPluginTransforms() {
+        pluginManager.applyTransforms();
     }
 
     private void startMinecraftServer(String[] args) {
         String jarName = getConfigString("server.jar", "server.jar");
         Path serverJar = workDir.resolve(jarName);
 
+        // Server CL parent includes framework CL + transform classloaders
+        // so Advice classes from plugin transforms are resolvable
+        ClassLoader frameworkCL = getClass().getClassLoader();
+        ClassLoader serverParentCL = pluginManager.getServerParentClassLoader(frameworkCL);
+
         try {
             serverLoader = new MinecraftServerLoader(serverJar);
-            ClassLoader serverClassLoader = serverLoader.load();
+            ClassLoader serverClassLoader = serverLoader.load(serverParentCL);
             serverLoader.startServer(args);
         } catch (Exception e) {
             Logger.error(e, "Failed to start Minecraft server");
@@ -153,13 +177,26 @@ public class LifecycleManager {
         state = State.WAIT_SERVER;
         Logger.info("Waiting for Minecraft server to start...");
 
-        // Wait for ServerStartEvent to be posted (via agent or console)
+        boolean serverThreadSeen = false;
         int maxWait = 300; // 5 minutes timeout
         int waited = 0;
+
         while (!serverStarted && waited < maxWait) {
             try {
                 Thread.sleep(1000);
                 waited++;
+
+                // Check if "Server thread" is alive
+                boolean threadAlive = isServerThreadAlive();
+
+                if (threadAlive) {
+                    serverThreadSeen = true;
+                } else if (serverThreadSeen) {
+                    // Server thread started then died → crash during startup
+                    Logger.error("Server thread crashed during startup!");
+                    return;
+                }
+
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -191,18 +228,17 @@ public class LifecycleManager {
                 // Post tick event
                 eventBus.post(new ServerTickEvent());
 
-                // Check if server thread is still alive
-                boolean serverAlive = false;
-                for (Thread thread : Thread.getAllStackTraces().keySet()) {
-                    if ("Server thread".equals(thread.getName()) && thread.isAlive()) {
-                        serverAlive = true;
-                        break;
-                    }
-                }
+                boolean serverAlive = isServerThreadAlive();
 
-                // Once the server has started, break when the thread dies
+                // Break if server has started and thread died (normal stop or crash)
                 if (serverStarted && !serverAlive) {
                     Logger.info("Server thread has stopped");
+                    break;
+                }
+
+                // Break if server thread died before ever starting (crash during init)
+                if (!serverStarted && !serverAlive) {
+                    Logger.error("Server thread is not running and server was never started — likely crashed");
                     break;
                 }
 
@@ -213,10 +249,18 @@ public class LifecycleManager {
             }
         }
 
-        // If stopped by command (not by server thread), ensure we reach shutdown
         if (!running) {
             Logger.info("Framework stopped by command");
         }
+    }
+
+    private boolean isServerThreadAlive() {
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            if ("Server thread".equals(thread.getName()) && thread.isAlive()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void shutdown() {
@@ -239,7 +283,10 @@ public class LifecycleManager {
             pluginManager.disablePlugins();
         }
 
-        // Uninstall console interceptor (restore original System.out)
+        // Uninstall interceptors
+        if (systemInInterceptor != null) {
+            systemInInterceptor.uninstall();
+        }
         if (consoleInterceptor != null) {
             consoleInterceptor.uninstall();
         }
@@ -261,16 +308,17 @@ public class LifecycleManager {
 
     private void onConsoleCommand(String input) {
         if (commandManager != null) {
-            CommandSender sender = System.out::println;
+            // Use OriginalOutput to avoid re-interception
+            CommandSender sender = msg -> OriginalOutput.get().println(msg);
             commandManager.dispatch(input.trim(), sender);
         }
     }
 
     private void registerBuiltinCommands() {
-        // Built-in stop command
-        commandManager.registerCommand("stop", "Stops the server", (sender, args) -> {
-            sender.sendMessage("Stopping server...");
-            running = false;
+        // Built-in stop command — force terminate
+        commandManager.registerCommand("stop", "Force terminates the server and framework", (sender, args) -> {
+            sender.sendMessage("Force stopping...");
+            System.exit(0);
         });
 
         // Built-in plugins command

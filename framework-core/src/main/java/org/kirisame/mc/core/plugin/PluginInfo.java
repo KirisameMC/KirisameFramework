@@ -5,6 +5,7 @@ import org.kirisame.mc.api.plugin.PluginDescriptor;
 import org.kirisame.mc.api.plugin.PluginState;
 import org.kirisame.mc.api.plugin.KirisamePlugin;
 import org.kirisame.mc.api.transform.ClassTransform;
+import org.kirisame.mc.api.transform.TransformBridge;
 
 import java.nio.file.Path;
 import java.util.*;
@@ -23,6 +24,7 @@ public class PluginInfo {
     private PluginClassLoader classLoader;
     private KirisamePlugin instance;
     private ClassTransform transformInstance;
+    private TransformBridge transformBridge;
 
     // Dependency info (populated during resolution)
     private final List<String> requiredDeps = new ArrayList<>();
@@ -56,6 +58,7 @@ public class PluginInfo {
     public PluginClassLoader getClassLoader() { return classLoader; }
     public KirisamePlugin getInstance() { return instance; }
     public ClassTransform getTransformInstance() { return transformInstance; }
+    public TransformBridge getTransformBridge() { return transformBridge; }
     public List<String> getRequiredDeps() { return Collections.unmodifiableList(requiredDeps); }
     public List<String> getOptionalDeps() { return Collections.unmodifiableList(optionalDeps); }
     public Set<String> getResolvedDeps() { return Collections.unmodifiableSet(resolvedDeps); }
@@ -66,6 +69,7 @@ public class PluginInfo {
     public void setClassLoader(PluginClassLoader classLoader) { this.classLoader = classLoader; }
     public void setInstance(KirisamePlugin instance) { this.instance = instance; }
     public void setTransformInstance(ClassTransform transformInstance) { this.transformInstance = transformInstance; }
+    public void setTransformBridge(TransformBridge transformBridge) { this.transformBridge = transformBridge; }
     public void addResolvedDep(String name) { resolvedDeps.add(name); }
 
     /**

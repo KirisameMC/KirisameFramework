@@ -2,6 +2,7 @@ package org.kirisame.mc.api.plugin;
 
 import org.kirisame.mc.api.event.EventBus;
 import org.kirisame.mc.api.service.ServiceRegistry;
+import org.kirisame.mc.api.transform.TransformBridge;
 
 import java.nio.file.Path;
 import java.util.Optional;
@@ -26,6 +27,17 @@ public interface PluginContext {
 
     /** Returns a logger scoped to this plugin. */
     PluginLogger getLogger();
+
+    /**
+     * Returns the transform bridge for this plugin.
+     * Allows the plugin's ClassTransform (running in the server classloader)
+     * to communicate with the plugin instance (running in the plugin classloader).
+     *
+     * <p>The same TransformBridge instance is shared between the plugin and its transform.
+     * The transform receives it via {@code ExamplePlugin.TRANSFORM_BRIDGE},
+     * and the plugin receives it via {@code getContext().getTransformBridge()}.</p>
+     */
+    TransformBridge getTransformBridge();
 
     // --- Dependency access ---
 

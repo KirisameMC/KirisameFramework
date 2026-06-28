@@ -18,6 +18,9 @@ import org.kirisame.mc.api.plugin.PluginDescriptor;
 )
 public class ExamplePlugin extends KirisamePlugin {
 
+    /** Declares the transform class for the framework to load. */
+    public static final String TRANSFORM_CLASS = "org.kirisame.mc.example.transform.TickCounterTransform";
+
     private int tickCount;
 
     @Override
@@ -39,8 +42,10 @@ public class ExamplePlugin extends KirisamePlugin {
     @EventHandler
     public void onTick(ServerTickEvent event) {
         tickCount++;
+        // Read data written by the transform via TransformBridge
         if (tickCount % 400 == 0) {
-            getLogger().info("20 seconds passed, tick={}", tickCount);
+            Object serverTick = getContext().getTransformBridge().getData("server-tick", "N/A");
+            getLogger().info("20s passed, plugin-tick={}, server-tick={}", tickCount, serverTick);
         }
     }
 

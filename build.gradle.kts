@@ -57,12 +57,14 @@ tasks.register("prepareWorkdir") {
 
 tasks.register("beforeRunning") {
     group = "kirisame"
-    description = "Copies framework JARs into workdir"
-    dependsOn(":framework-agent:shadowJar", ":framework-core:shadowJar")
+    description = "Copies framework JARs and plugin JARs into workdir"
+    dependsOn(":framework-agent:shadowJar", ":framework-core:shadowJar",
+             ":example-plugin:shadowJar", ":example-addon:shadowJar")
     doLast {
         val workdir = File("${rootProject.projectDir}/workdir")
         workdir.mkdirs()
-        File(workdir, "plugins").mkdirs()
+        val pluginsDir = File(workdir, "plugins")
+        pluginsDir.mkdirs()
 
         val agentJar = project(":framework-agent").tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar").get().archiveFile.get().asFile
         val coreJar = project(":framework-core").tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar").get().archiveFile.get().asFile
@@ -70,5 +72,13 @@ tasks.register("beforeRunning") {
         agentJar.copyTo(File(workdir, agentJar.name), overwrite = true)
         coreJar.copyTo(File(workdir, coreJar.name), overwrite = true)
         println("Copied: ${agentJar.name}, ${coreJar.name} -> workdir/")
+
+        // Copy plugin JARs to workdir/plugins/
+        val pluginProjects = listOf(":example-plugin", ":example-addon")
+        for (proj in pluginProjects) {
+            val pluginJar = project(proj).tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar").get().archiveFile.get().asFile
+            pluginJar.copyTo(File(pluginsDir, pluginJar.name), overwrite = true)
+            println("Copied plugin: ${pluginJar.name} -> workdir/plugins/")
+        }
     }
 }
