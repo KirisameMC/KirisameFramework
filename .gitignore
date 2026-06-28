@@ -43,8 +43,4 @@ bin/
 .DS_Store
 
 ### Kirisame ###
-workdir/*.jar
-workdir/plugins/*.jar
-workdir/REBOOT_FLAG.flag
-workdir/logs/
-workdir/*.log
+workdir

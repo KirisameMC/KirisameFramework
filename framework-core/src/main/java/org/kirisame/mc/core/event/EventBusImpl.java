@@ -7,15 +7,13 @@ import org.kirisame.mc.api.event.EventHandler;
 import org.kirisame.mc.api.event.EventPriority;
 import org.tinylog.Logger;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * High-performance event bus using MethodHandle for dispatch.
+ * Event bus using reflection for dispatch.
  * Thread-safe for registration and posting.
  */
 public class EventBusImpl implements EventBus {
@@ -39,23 +37,21 @@ public class EventBusImpl implements EventBus {
             Class<? extends Event> eventType = params[0].asSubclass(Event.class);
             method.setAccessible(true);
 
-            try {
-                MethodHandle handle = MethodHandles.lookup().unreflect(method);
-                Registration reg = new Registration(listener, handle, annotation.priority(), annotation.ignoreCancelled());
+            Registration reg = new Registration(listener, method, annotation.priority(), annotation.ignoreCancelled());
 
-                handlers.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>()).add(reg);
+            handlers.computeIfAbsent(eventType, k -> new CopyOnWriteArrayList<>()).add(reg);
 
-                // Also register for parent event classes
-                Class<?> superClass = eventType.getSuperclass();
-                while (superClass != null && Event.class.isAssignableFrom(superClass)) {
-                    @SuppressWarnings("unchecked")
-                    Class<? extends Event> superEventType = (Class<? extends Event>) superClass;
-                    handlers.computeIfAbsent(superEventType, k -> new CopyOnWriteArrayList<>()).add(reg);
-                    superClass = superClass.getSuperclass();
-                }
-            } catch (IllegalAccessException e) {
-                Logger.error(e, "Failed to register event handler: {}.{}", clazz.getSimpleName(), method.getName());
+            // Also register for parent event classes
+            Class<?> superClass = eventType.getSuperclass();
+            while (superClass != null && Event.class.isAssignableFrom(superClass)) {
+                @SuppressWarnings("unchecked")
+                Class<? extends Event> superEventType = (Class<? extends Event>) superClass;
+                handlers.computeIfAbsent(superEventType, k -> new CopyOnWriteArrayList<>()).add(reg);
+                superClass = superClass.getSuperclass();
             }
+
+            Logger.debug("Registered handler: {}.{} for {}",
+                    clazz.getSimpleName(), method.getName(), eventType.getSimpleName());
         }
     }
 
@@ -85,10 +81,12 @@ public class EventBusImpl implements EventBus {
             }
 
             try {
-                reg.handle.invoke(event);
-            } catch (Throwable e) {
-                Logger.error(e, "Error dispatching event {} to handler in {}",
-                        event.getClass().getSimpleName(), reg.target.getClass().getSimpleName());
+                reg.method.invoke(reg.target, event);
+            } catch (Exception e) {
+                Logger.error(e, "Error dispatching event {} to handler in {}.{}",
+                        event.getClass().getSimpleName(),
+                        reg.target.getClass().getSimpleName(),
+                        reg.method.getName());
             }
         }
 
@@ -97,7 +95,7 @@ public class EventBusImpl implements EventBus {
 
     private record Registration(
             Object target,
-            MethodHandle handle,
+            Method method,
             EventPriority priority,
             boolean ignoreCancelled
     ) {}

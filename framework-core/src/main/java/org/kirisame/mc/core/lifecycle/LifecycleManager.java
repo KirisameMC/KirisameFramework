@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.kirisame.mc.agent.AgentBridge;
 import org.kirisame.mc.api.command.CommandSender;
+import org.kirisame.mc.api.event.EventHandler;
 import org.kirisame.mc.api.event.EventBus;
 import org.kirisame.mc.api.event.impl.ServerStartEvent;
 import org.kirisame.mc.api.event.impl.ServerStopEvent;
@@ -88,6 +89,9 @@ public class LifecycleManager {
         eventBus = new EventBusImpl();
         serviceRegistry = new ServiceRegistryImpl();
         commandManager = new CommandManager();
+
+        // Register this lifecycle manager as an event listener (for ServerStartEvent)
+        eventBus.register(this);
 
         // Register built-in commands
         registerBuiltinCommands();
@@ -192,7 +196,8 @@ public class LifecycleManager {
                     }
                 }
 
-                if (!serverAlive && serverStarted) {
+                // Once the server has started, break when the thread dies
+                if (serverStarted && !serverAlive) {
                     Logger.info("Server thread has stopped");
                     break;
                 }
@@ -203,21 +208,20 @@ public class LifecycleManager {
                 break;
             }
         }
+
+        // If stopped by command (not by server thread), ensure we reach shutdown
+        if (!running) {
+            Logger.info("Framework stopped by command");
+        }
     }
 
     private void shutdown() {
         state = State.SHUTDOWN;
         Logger.info("Framework shutting down...");
 
-        // Uninstall console interceptor
-        if (consoleInterceptor != null) {
-            consoleInterceptor.uninstall();
-        }
-
-        // Post server stop event
+        // Post server stop event — plugins can cancel to request a reboot
         ServerStopEvent stopEvent = eventBus.post(new ServerStopEvent());
         if (stopEvent.isCancelled()) {
-            // Write reboot flag for the launcher
             try {
                 Files.writeString(workDir.resolve("REBOOT_FLAG.flag"), "reboot");
                 Logger.info("Reboot requested by plugin");
@@ -226,12 +230,21 @@ public class LifecycleManager {
             }
         }
 
-        // Disable plugins
+        // Disable plugins (in reverse dependency order)
         if (pluginManager != null) {
             pluginManager.disablePlugins();
         }
 
+        // Uninstall console interceptor (restore original System.out)
+        if (consoleInterceptor != null) {
+            consoleInterceptor.uninstall();
+        }
+
         Logger.info("Framework shutdown complete");
+
+        // Force exit to ensure the JVM terminates
+        // (daemon threads or leaked non-daemon threads could keep the process alive)
+        System.exit(0);
     }
 
     // --- Console handling ---
@@ -311,8 +324,12 @@ public class LifecycleManager {
 
     // --- Event listeners ---
 
+    @EventHandler
     public void onServerStart(ServerStartEvent event) {
-        serverStarted = true;
+        if (!serverStarted) {
+            serverStarted = true;
+            Logger.info("Server started (detected via event)");
+        }
     }
 
     // --- Getters ---
