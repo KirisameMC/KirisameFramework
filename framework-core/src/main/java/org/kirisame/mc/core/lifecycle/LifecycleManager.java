@@ -14,6 +14,7 @@ import org.kirisame.mc.api.exception.PluginLoadException;
 import org.kirisame.mc.core.command.CommandManager;
 import org.kirisame.mc.core.console.ConsoleInterceptor;
 import org.kirisame.mc.core.console.ConsoleParser;
+import org.kirisame.mc.core.console.OriginalOutput;
 import org.kirisame.mc.core.console.message.ParsedMessage;
 import org.kirisame.mc.core.event.EventBusImpl;
 import org.kirisame.mc.core.minecraft.MinecraftServerLoader;
@@ -95,6 +96,9 @@ public class LifecycleManager {
 
         // Register built-in commands
         registerBuiltinCommands();
+
+        // Capture original System.out BEFORE installing the interceptor
+        OriginalOutput.capture();
 
         // Install console interceptor
         consoleParser = new ConsoleParser(eventBus);
